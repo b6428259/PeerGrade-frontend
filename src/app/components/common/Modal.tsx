@@ -42,7 +42,9 @@ export function ConfirmationModal({
   };
 
   const handleCancel = () => {
-    onCancel && onCancel();
+    if (onCancel) {
+      onCancel();
+    }    
     onOpenChange(false);
   };
 

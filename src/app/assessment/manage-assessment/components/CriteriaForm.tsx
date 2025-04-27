@@ -30,13 +30,12 @@ interface CriteriaFormProps {
 
 export default function CriteriaForm({ 
   selectedCourseId, 
-  assessmentId, 
   onCriteriaChange,
   initialCriteria 
 }: CriteriaFormProps) {
   const [criteria, setCriteria] = useState<Criterion[]>(initialCriteria || []);
   const [totalMaxScore, setTotalMaxScore] = useState(0);
-  const { showWarningToast, showErrorToast } = useCustomToast();
+  const { showWarningToast } = useCustomToast();
   const [criterionToDelete, setCriterionToDelete] = useState<number | null>(null);
 
   useEffect(() => {
@@ -87,7 +86,12 @@ export default function CriteriaForm({
     setCriterionToDelete(null);
   };
 
-    const updateCriterion = (index: number, field: keyof Criterion, value: any) => {
+  const updateCriterion = (
+    index: number,
+    field: keyof Criterion,
+    value: string | number | RatingScale[]
+  ) => {
+  
     const newCriteria = [...criteria];
     
     if (field === 'maxScore') {
@@ -223,7 +227,7 @@ export default function CriteriaForm({
                       ...newCriteria[index].ratingScale[scaleIndex],
                       [field]: value,
                       percentageScore: field === 'score'
-                        ? (value / criterion.maxScore) * 100
+                        ? (Number(value) / criterion.maxScore) * 100
                         : newCriteria[index].ratingScale[scaleIndex].percentageScore
                     };
                     setCriteria(newCriteria);

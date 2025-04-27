@@ -53,7 +53,7 @@ export default function MyGroupPage() {
   }>({});
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingGroups, setLoadingGroups] = useState<{
+  const [loadingGroups] = useState<{
     [key: string]: boolean;
   }>({});
   const [error, setError] = useState("");

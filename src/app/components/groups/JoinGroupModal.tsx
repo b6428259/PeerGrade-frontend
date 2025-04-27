@@ -44,7 +44,7 @@ const JoinGroupModal = memo(({
   const [isLoading, setIsLoading] = useState(false);
   const { showSuccessToast, showErrorToast } = useCustomToast();
   
-  const cancelTokenRef = useRef<any>(null);
+  const cancelTokenRef = useRef<ReturnType<typeof axios.CancelToken.source> | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Cleanup function
@@ -170,10 +170,15 @@ const JoinGroupModal = memo(({
         onGroupJoined();
         onClose();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        showErrorToast(error.response?.data?.error || 'Failed to join group');
+      } else {
+        showErrorToast('Failed to join group');
+      }
       console.error('Error joining group:', error);
-      showErrorToast(error.response?.data?.error || 'Failed to join group');
     }
+    
   };
 
   // Close the modal

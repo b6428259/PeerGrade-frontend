@@ -15,7 +15,7 @@ interface RatingScaleFormProps {
   ratingScale: RatingScale[];
   maxScore: number;
   remainingTotalScore: number;
-  onUpdate: (index: number, field: keyof RatingScale, value: any) => void;
+  onUpdate: (index: number, field: keyof RatingScale, value: string | number) => void;
 }
 
 export default function RatingScaleForm({ 

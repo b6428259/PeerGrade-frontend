@@ -11,9 +11,15 @@ export default function Login() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false); // New state to trigger navigation
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth(); // เพิ่ม isAuthenticated
+
+  // ตรวจสอบว่าผู้ใช้ login อยู่แล้วหรือไม่
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/home'); // ใช้ replace แทน push เพื่อไม่ให้กดปุ่มกลับมาหน้า login ได้
+    }
+  }, [isAuthenticated, router]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -27,29 +33,28 @@ export default function Login() {
         password
       });
   
-      // Store the user data along with the token
-      login(response.data.token, response.data.user); 
+      // แสดง message ก่อนแล้วค่อย login
       setMessage('Login successful!');
-      setLoginSuccess(true);
+      
+      // รอสักครู่ก่อนเปลี่ยนหน้า เพื่อให้ผู้ใช้เห็น message
+      setTimeout(() => {
+        // Store the user data along with the token
+        login(response.data.token, response.data.user);
+        // ไม่ต้อง navigate ที่นี่ เพราะจะเกิดขึ้นอัตโนมัติใน useEffect เมื่อ isAuthenticated เปลี่ยน
+      }, 500);
     } catch (err: any) {
       console.error('Login error:', err);
       if (err.response?.status === 401) {
-        setError('Invalid username or password');
+        setError('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      } else if (err.response?.status) {
+        setError(`เกิดข้อผิดพลาด: รหัส ${err.response.status}`);
       } else {
-        setError('An error occurred. Please try again later.');
+        setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง');
       }
     } finally {
       setIsLoading(false);
     }
   };
-  
-
-  // Use useEffect to handle navigation after login success
-  useEffect(() => {
-    if (loginSuccess) {
-      router.push('/home');
-    }
-  }, [loginSuccess, router]); // Only runs when loginSuccess changes
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
@@ -132,10 +137,10 @@ export default function Login() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span>Logging in...</span>
+                <span>กำลังเข้าสู่ระบบ...</span>
               </>
             ) : (
-              <span>Login</span>
+              <span>เข้าสู่ระบบ</span>
             )}
           </button>
         </form>
@@ -143,7 +148,7 @@ export default function Login() {
         {/* Optional: Forgot Password Link */}
         <div className="mt-6 text-center">
           <a href="#" className="text-sm text-blue-300 hover:text-blue-200 transition duration-200">
-            Forgot your password?
+            ลืมรหัสผ่าน?
           </a>
         </div>
       </div>

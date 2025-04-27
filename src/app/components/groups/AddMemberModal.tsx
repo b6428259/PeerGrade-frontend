@@ -125,12 +125,14 @@ const AddMemberModal = memo(({
           setFilteredStudents(prev => prev.filter(s => s._id !== studentId));
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        showErrorToast(error.response?.data?.error || 'Failed to add member');
+      } else {
+        showErrorToast('Failed to add member');
+      }
       console.error('Error adding member:', error);
-      showErrorToast(error.response?.data?.error || 'Failed to add member');
-    } finally {
-      setIsAdding(null);
-    }
+    }    
   };
 
   if (!isOpen) return null;

@@ -5,7 +5,7 @@ import { useAuth } from '@/app/contexts/AuthContext';
 import axios from 'axios';
 import CourseSelector from '../manage/components/CourseSelector';
 import LoadingSpinner from '@/app/components/LoadingSpinner';
-import { ArrowLeft, UserPlus, UserMinus, Users, UserCircle } from 'lucide-react';
+import { ArrowLeft, UserPlus, Users, UserCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCustomToast } from '@/app/components/common/Toast';
 import { ConfirmationModal } from '@/app/components/common/Modal';

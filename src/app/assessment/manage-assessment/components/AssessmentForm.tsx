@@ -38,7 +38,6 @@ interface AssessmentFormProps {
 
 export default function AssessmentForm({
   selectedCourseId,
-  assessmentId,
   onCriteriaLoad
 }: AssessmentFormProps) {
   const router = useRouter();
@@ -70,13 +69,14 @@ export default function AssessmentForm({
         const assessment = response.data.data[0];
 
         // แปลงข้อมูล criteria
-        const transformedCriteria = assessment.criteria.map((criterion: { ratingScale: any[]; maxScore: number; }) => ({
+        const transformedCriteria: Criterion[] = assessment.criteria.map((criterion: Criterion) => ({
           ...criterion,
-          ratingScale: criterion.ratingScale.map((scale: { score: number; }) => ({
+          ratingScale: criterion.ratingScale.map((scale: RatingScale) => ({
             ...scale,
-            percentageScore: (scale.score / criterion.maxScore) * 100
-          }))
+            percentageScore: (scale.score / criterion.maxScore) * 100,
+          })),
         }));
+        
 
         const transformedAssessment = {
           ...assessment,

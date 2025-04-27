@@ -70,3 +70,68 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* เพิ่มส่วนนี้ในไฟล์ globals.css ของคุณ */
+
+/* ลูกเล่นเอฟเฟกต์ Bubble */
+.bubble-card {
+  position: relative;
+  isolation: isolate;
+  transition: all 0.3s ease-in-out;
+}
+
+.bubble-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle at top right, 
+                rgba(255, 255, 255, 0.08),
+                rgba(255, 255, 255, 0) 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.bubble-card:hover::before {
+  opacity: 1;
+}
+
+/* ลูกเล่นเมื่อโฟกัส */
+.bubble-card:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+/* เอฟเฟกต์ลูกบอลเรืองแสงเคลื่อนไหว */
+@keyframes float {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes float-alt {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(20px) rotate(-5deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+.orb-1 {
+  animation: float 15s ease-in-out infinite;
+}
+
+.orb-2 {
+  animation: float-alt 18s ease-in-out infinite;
+}

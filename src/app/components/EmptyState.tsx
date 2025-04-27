@@ -3,6 +3,7 @@ import { FileQuestion } from 'lucide-react';
 interface EmptyStateProps {
   title: string;
   description: string;
+  iconType?: string;
 }
 
 export default function EmptyState({ title, description }: EmptyStateProps) {

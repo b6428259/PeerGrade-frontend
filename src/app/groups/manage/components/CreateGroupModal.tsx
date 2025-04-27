@@ -13,7 +13,7 @@ interface CreateGroupModalProps {
     onCreateGroup: (groupName: string, memberIds: string[]) => Promise<void>;
 }
 
-export default function CreateGroupModal({ courseId, students, onClose, onCreateGroup }: CreateGroupModalProps) {
+export default function CreateGroupModal({ students, onClose, onCreateGroup }: CreateGroupModalProps) {
     const [groupName, setGroupName] = useState('');
     const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);

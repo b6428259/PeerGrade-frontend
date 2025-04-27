@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import ProtectedRoute from '../components/ProtectedRoute';
@@ -10,6 +10,10 @@ import {
   BookOpenIcon,
   UsersIcon,
   LogOutIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  ClockIcon,
+  AlertCircleIcon,
 } from 'lucide-react';
 import React from 'react';
 import QuickActionsSection from './components/QuickActionsSection';
@@ -22,8 +26,24 @@ interface Course {
   students: { _id: string; name: string }[];
   academicYear: string;
   semester: string;
+  assessments?: Assessment[];
 }
 
+interface Assessment {
+  _id: string;
+  title: string;
+  status: string;
+  dueDate: string;
+  hasCompletedFullAssessment: boolean;
+}
+
+// ย้ายข้อมูลนี้ไปอยู่นอก component เพื่อไม่ต้องสร้างใหม่ทุกครั้งที่ render
+const axiosInstance = axios.create({
+  baseURL: 'http://localhost:5000/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 const HomePage = () => {
   const { user, logout, isLoading: authIsLoading } = useAuth();
@@ -31,57 +51,12 @@ const HomePage = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState<string | null>(null);
+  const [hasLoadedData, setHasLoadedData] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
-
-
-  const fetchCourses = async () => {
-    try {
-      setIsLoading(true);
-      const token = localStorage.getItem('token');
-      const endpoint =
-        user?.role === 'admin'
-          ? 'http://localhost:5000/api/courses'
-          : 'http://localhost:5000/api/courses/my-courses';
-
-      const response = await axios.get(endpoint, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.data.success) {
-        setCourses(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching courses:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(format(new Date(), 'dd/MM/yyyy HH:mm:ss'));
-    }, 1000);
-
-    if (user) {
-      fetchCourses();
-    }
-
-    return () => clearInterval(timer);
-  }, [user]);  // Trigger fetchCourses when `user` changes
-
-  if (authIsLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  const categorizeCourses = (courses: Course[]) => {
+  // ย้าย useMemo มาก่อน useCallback เพื่อให้ลำดับการใช้ hooks เหมือนเดิมในทุก render
+  // ใช้ useMemo ตรงนี้เพื่อให้มีอยู่ในทุก render แม้จะยังไม่มีข้อมูล courses
+  const { current: currentCourses, past: pastCourses } = useMemo(() => {
     if (!courses || courses.length === 0) {
       return { current: [], past: [] };
     }
@@ -89,9 +64,115 @@ const HomePage = () => {
       current: courses.filter(() => true), // Current courses filtering logic
       past: [],
     };
-  };
+  }, [courses]);
 
-  const { current: currentCourses, past: pastCourses } = categorizeCourses(courses);
+  const fetchCourses = useCallback(async () => {
+    if (!user || hasLoadedData) return; // ป้องกันการเรียกซ้ำ
+    
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+      
+      // ปรับปรุง headers ให้ใส่ token เฉพาะเมื่อเรียก API
+      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      const endpoint = user.role === 'admin' ? '/courses' : '/courses/my-courses';
+
+      const response = await axiosInstance.get(endpoint);
+
+      if (response.data.success) {
+        const coursesData = response.data.data;
+        
+        // เฉพาะกรณี student เท่านั้น จึงจะดึงข้อมูล assessments
+        if (user.role === 'student') {
+          try {
+            // ดึงข้อมูล assessments
+            const assessmentsResponse = await axiosInstance.get('/assessments/my-assessments');
+            
+            if (assessmentsResponse.data.success) {
+              const assessmentsData = assessmentsResponse.data.data;
+              
+              // นับจำนวน assessment ที่มีสถานะ pending และมีสมาชิกที่ยังไม่ได้ประเมิน
+              const pendingItems = assessmentsData.filter(
+                (assessment: any) => 
+                  assessment.status === 'pending' && 
+                  assessment.remainingMembers && 
+                  assessment.remainingMembers.length > 0
+              );
+              
+              // กำหนดจำนวน pending assessments
+              setPendingCount(pendingItems.length);
+              
+              // สร้าง map เพื่อการค้นหาที่รวดเร็วขึ้น
+              const assessmentsByCourse = assessmentsData.reduce((acc: any, assessment: any) => {
+                const courseId = assessment.course._id;
+                if (!acc[courseId]) {
+                  acc[courseId] = [];
+                }
+                acc[courseId].push(assessment);
+                return acc;
+              }, {});
+              
+              // จัด assessment เข้าคู่กับ course ที่เกี่ยวข้อง (ใช้ map แทนการวนลูปซ้อน)
+              const coursesWithAssessments = coursesData.map((course: Course) => ({
+                ...course,
+                assessments: assessmentsByCourse[course._id] || []
+              }));
+              
+              setCourses(coursesWithAssessments);
+            } else {
+              setCourses(coursesData);
+            }
+          } catch (assessmentError) {
+            console.error('Error fetching assessments:', assessmentError);
+            setCourses(coursesData);
+          }
+        } else {
+          // กรณีไม่ใช่ student ให้ใช้ข้อมูล courses ปกติ
+          setCourses(coursesData);
+        }
+        
+        setHasLoadedData(true);
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, hasLoadedData]);
+
+  useEffect(() => {
+    // ใช้ requestAnimationFrame เพื่อลดการ re-render
+    const updateTime = () => {
+      setCurrentTime(format(new Date(), 'dd/MM/yyyy HH:mm:ss'));
+    };
+    
+    // อัปเดตเวลาทุก 1 วินาที แต่ไม่ให้ re-render ทั้งหน้า
+    const timerID = setInterval(updateTime, 1000);
+    
+    return () => clearInterval(timerID);
+  }, []);
+
+  // แยกการดึงข้อมูลออกจาก effect ของเวลา
+  useEffect(() => {
+    if (user && !hasLoadedData) {
+      fetchCourses();
+    }
+  }, [user, fetchCourses, hasLoadedData]);
+
+  // แสดง loading screen ระหว่าง authentication
+  if (authIsLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <ProtectedRoute>
@@ -141,8 +222,8 @@ const HomePage = () => {
             </div>
           </section>
 
-          {/* Conditionally render Quick Actions only when `user` is available */}
-          {user && <QuickActionsSection user={user} router={router} />}
+          {/* ส่ง pendingCount เป็น prop ไปให้ QuickActionsSection */}
+          {user && <QuickActionsSection user={user} router={router} pendingCount={pendingCount} />}
 
           <section>
             <CourseSection
@@ -150,6 +231,7 @@ const HomePage = () => {
               courses={currentCourses}
               isLoading={isLoading}
               router={router}
+              userRole={user?.role}
             />
 
             {pastCourses.length > 0 && (
@@ -158,6 +240,7 @@ const HomePage = () => {
                 courses={pastCourses}
                 isLoading={isLoading}
                 router={router}
+                userRole={user?.role}
               />
             )}
           </section>
@@ -167,23 +250,93 @@ const HomePage = () => {
   );
 };
 
+// ย้าย AssessmentStatusIndicator ออกมาเป็น memo component
+const AssessmentStatusIndicator = React.memo(({ assessment }: { assessment: Assessment }) => {
+  // คำนวณ status ตามเงื่อนไขที่กำหนดในโค้ดเดิม
+  const currentDate = new Date();
+  const dueDate = new Date(assessment.dueDate);
+  const isFullyCompleted = assessment.hasCompletedFullAssessment;
 
-// Course Section Component
-interface CourseSectionProps {
-  title: string;
-  courses: Course[];
-  isLoading: boolean;
-  router: any;
-}
+  let status;
+  if (isFullyCompleted) {
+    status = 'completed';
+  } else if (assessment.status === 'closed') {
+    status = 'closed';
+  } else if (dueDate < currentDate) {
+    status = 'expired';
+  } else {
+    status = 'pending';
+  }
 
-const CourseSection: React.FC<CourseSectionProps> = ({ title, courses, isLoading, router }) => {
-  const { user } = useAuth(); // Add this to get user information
+  // กำหนดสีและไอคอนตาม status
+  const getStatusDetails = () => {
+    switch (status) {
+      case 'completed':
+        return {
+          icon: <CheckCircleIcon className="w-5 h-5 text-green-400" />,
+          tooltip: "ประเมินเสร็จสมบูรณ์แล้ว",
+          bgColor: "bg-green-900/30",
+        };
+      case 'closed':
+        return {
+          icon: <XCircleIcon className="w-5 h-5 text-red-400" />,
+          tooltip: "การประเมินถูกปิด",
+          bgColor: "bg-red-900/30",
+        };
+      case 'expired':
+        return {
+          icon: <AlertCircleIcon className="w-5 h-5 text-yellow-400" />,
+          tooltip: "หมดเวลาการประเมิน",
+          bgColor: "bg-yellow-900/30",
+        };
+      case 'pending':
+        return {
+          icon: <ClockIcon className="w-5 h-5 text-blue-400" />,
+          tooltip: "รอการประเมิน",
+          bgColor: "bg-blue-900/30",
+        };
+      default:
+        return {
+          icon: <ClockIcon className="w-5 h-5 text-gray-400" />,
+          tooltip: "ไม่มีข้อมูล",
+          bgColor: "bg-gray-900/30",
+        };
+    }
+  };
 
-  const handleCourseClick = async (courseId: string) => {
+  const { icon, tooltip, bgColor } = getStatusDetails();
+
+  // แสดงไอคอนพร้อม tooltip
+  return (
+    <div className="relative group">
+      <div className={`p-2 rounded-full ${bgColor} cursor-help`}>
+        {icon}
+      </div>
+      {/* Tooltip */}
+      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap pointer-events-none">
+        {tooltip}
+      </div>
+    </div>
+  );
+});
+
+AssessmentStatusIndicator.displayName = 'AssessmentStatusIndicator';
+
+// ปรับปรุง CourseSection ให้เป็น memo component
+const CourseSection = React.memo(({ title, courses, isLoading, router, userRole }: CourseSectionProps) => {
+  const { user } = useAuth();
+
+  const handleCourseClick = useCallback(async (courseId: string) => {
     if (user?.role === 'teacher') {
       try {
         // First fetch assessments for the course
         const token = localStorage.getItem('token');
+        
+        if (!token) {
+          console.error('No token found');
+          return;
+        }
+        
         const assessmentsResponse = await axios.get(
           `http://localhost:5000/api/assessments/course/${courseId}`,
           {
@@ -217,7 +370,7 @@ const CourseSection: React.FC<CourseSectionProps> = ({ title, courses, isLoading
       // For students, keep the original behavior
       router.push(`/course/${courseId}`);
     }
-  };
+  }, [user?.role, router]);
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 mb-6 border border-blue-800/30">
@@ -236,10 +389,22 @@ const CourseSection: React.FC<CourseSectionProps> = ({ title, courses, isLoading
                 className="bg-gray-900/50 border border-blue-800/30 rounded-xl p-5 
                            hover:bg-gray-800/50 transition-all cursor-pointer backdrop-blur-lg"
               >
-                <h3 className="font-semibold text-lg mb-2">{course.courseName}</h3>
-                <p className="text-blue-200 text-sm mb-3">
-                  {course.courseCode}
-                </p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold text-lg mb-2">{course.courseName}</h3>
+                    <p className="text-blue-200 text-sm mb-3">
+                      {course.courseCode}
+                    </p>
+                  </div>
+                  
+                  {/* แสดง Status Indicator เฉพาะสำหรับนักศึกษา และเมื่อมีข้อมูล assessments */}
+                  {userRole === 'student' && course.assessments && course.assessments.length > 0 && (
+                    <div>
+                      <AssessmentStatusIndicator assessment={course.assessments[0]} />
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex justify-between text-sm text-blue-300">
                   <span>Students: {course.students?.length || 0}</span>
                   <span>Teachers: {course.teachers?.length || 0}</span>
@@ -253,12 +418,18 @@ const CourseSection: React.FC<CourseSectionProps> = ({ title, courses, isLoading
       ) : (
         <div className="text-center text-blue-200">Error loading courses</div>
       )}
-
-      <div className="mt-4 text-xs text-gray-400">
-        <p>Debug - Number of courses: {courses?.length || 0}</p>
-      </div>
     </div>
   );
-};
+});
+
+interface CourseSectionProps {
+  title: string;
+  courses: Course[];
+  isLoading: boolean;
+  router: any;
+  userRole?: string;
+}
+
+CourseSection.displayName = 'CourseSection';
 
 export default HomePage;

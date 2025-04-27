@@ -1,30 +1,20 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import secureLocalStorage from "react-secure-storage";
 import {
   ArrowLeftIcon,
   ExclamationTriangleIcon,
   UserPlusIcon,
-  XCircleIcon,
 } from "@heroicons/react/24/outline";
 
+// เพิ่มหรือแก้ไข interface เพื่อระบุ type ให้ชัดเจนขึ้น
 interface Assessment {
   _id: string;
   title: string;
-  criteria: {
-    title: string;
-    description: string;
-    maxScore: number;
-    ratingScale: {
-      label: string;
-      score: number;
-      description: string;
-    }[];
-  }[];
+  criteria: Criterion[];
   dueDate: string;
   status: string;
   hasEvaluated: boolean;
@@ -36,20 +26,27 @@ interface Assessment {
   remainingMembers?: { _id: string }[];
 }
 
+interface Criterion {
+  title: string;
+  description: string;
+  maxScore: number;
+  ratingScale: RatingScale[];
+}
+
+interface RatingScale {
+  label: string;
+  score: number;
+  description: string;
+}
+
 interface GroupMember {
   _id: string;
   name: string;
 }
 
 interface Group {
-  _id: string;
-  groupName: string;
+  course: { _id: string };
   members: GroupMember[];
-}
-
-interface Evaluation {
-  evaluatee: string; // ID of the person who was evaluated
-  assessment: string; // ID of the assessment
 }
 
 interface ErrorState {
@@ -60,24 +57,19 @@ interface ErrorState {
 
 const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [filteredAssessments, setFilteredAssessments] = useState<Assessment[]>([]);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
-  const [selectedAssessment, setSelectedAssessment] =
-    useState<Assessment | null>(null);
-  const [selectedMember, setSelectedMember] = useState<GroupMember | null>(
-    null
-  );
-  const [evaluationScores, setEvaluationScores] = useState<
-    { criterionIndex: number; ratingChoice: string }[]
-  >([]);
+  const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
+  const [selectedMember, setSelectedMember] = useState<GroupMember | null>(null);
+  const [evaluationScores, setEvaluationScores] = useState<{ criterionIndex: number; ratingChoice: string }[]>([]);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [error, setError] = useState<ErrorState>({
-    show: false,
-    message: "",
-    title: "",
-  });
+  const [error, setError] = useState<ErrorState>({ show: false, message: "", title: "" });
+
+  // อ่านพารามิเตอร์ assessmentId จาก URL
+  const assessmentIdParam = searchParams.get('assessmentId');
 
   // Unwrap params using React.use()
   const { courseId } = use(params);
@@ -111,11 +103,25 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
             ...assessmentsResponse.data.data.closed,
           ];
           setAssessments(allAssessments);
+          
+          // ถ้ามีการส่ง assessmentId มา ให้กรองเฉพาะ assessment นั้น
+          if (assessmentIdParam) {
+            const filtered = allAssessments.filter(assessment => assessment._id === assessmentIdParam);
+            setFilteredAssessments(filtered);
+            
+            // ถ้าเจอ assessment ที่ตรงกัน ให้แสดงแบบประเมินทันที
+            if (filtered.length > 0) {
+              // แสดงแบบ Auto-expand
+              setSelectedAssessment(filtered[0]);
+            }
+          } else {
+            setFilteredAssessments(allAssessments);
+          }
         }
 
         if (groupsResponse.data.success) {
           const courseGroup = groupsResponse.data.data.find(
-            (group: any) => group.course._id === courseId
+            (group: Group) => group.course._id === courseId
           );
           if (courseGroup) {
             setGroupMembers(courseGroup.members);
@@ -154,7 +160,7 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
     };
 
     fetchData();
-  }, [courseId]);
+  }, [courseId, assessmentIdParam]);
 
   const handleSubmitEvaluation = async () => {
     if (!selectedAssessment || !selectedMember) return;
@@ -208,6 +214,12 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
           ...assessmentsResponse.data.data.closed,
         ];
         setAssessments(allAssessments);
+        
+        if (assessmentIdParam) {
+          setFilteredAssessments(allAssessments.filter(a => a._id === assessmentIdParam));
+        } else {
+          setFilteredAssessments(allAssessments);
+        }
       }
     } catch (error: any) {
       console.error("Error submitting evaluation:", error);
@@ -231,6 +243,17 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
     }
   };
 
+  // เพิ่มฟังก์ชันสำหรับแสดงการประเมินทั้งหมด
+  const showAllAssessments = () => {
+    // เปลี่ยนไปแสดง assessment ทั้งหมด
+    setFilteredAssessments(assessments);
+    setSelectedAssessment(null);
+    
+    // ลบพารามิเตอร์ assessmentId จาก URL
+    const newUrl = `/course/${courseId}`;
+    window.history.pushState({}, '', newUrl);
+  };
+
   // Function to dismiss the error message
   const dismissError = () => {
     setError({ show: false, message: "", title: "" });
@@ -250,11 +273,11 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
     );
   }
 
-  const isLoading = loading;
   // If there is an error, display only the error modal
   if (error.show) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
+        {/* Error modal code (unchanged) */}
         <div className="bg-gray-800/70 backdrop-blur-lg rounded-xl border border-blue-800/30 shadow-2xl max-w-md w-full overflow-hidden">
           {/* Header */}
           <div className="bg-red-800 p-4 flex items-center">
@@ -269,10 +292,10 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
             <div className="flex justify-center space-x-4">
               <button
                 onClick={() => router.back()}
-                disabled={isLoading}
+                disabled={loading}
                 className={`flex items-center px-4 py-2 rounded-lg text-sm 
                                   ${
-                                    isLoading
+                                    loading
                                       ? "bg-gray-600/20 text-gray-400 cursor-not-allowed"
                                       : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
                                   }`}
@@ -282,15 +305,15 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
               </button>
               <button
                 onClick={joinGroup}
-                disabled={isLoading}
+                disabled={loading}
                 className={`flex items-center px-4 py-2 rounded-lg text-sm 
                                   ${
-                                    isLoading
+                                    loading
                                       ? "bg-gray-600/20 text-gray-400 cursor-not-allowed"
                                       : "bg-green-600/20 text-green-400 hover:bg-green-600/30 transition-colors"
                                   }`}
               >
-                {isLoading ? (
+                {loading ? (
                   <>
                     <div className="h-4 w-4 mr-2 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
                     Loading...
@@ -313,17 +336,32 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white p-8">
       <div className="max-w-7xl mx-auto">
         {/* Back Button */}
-        <button
-          onClick={() => router.push('/home')}
-          className="mb-6 flex items-center text-white hover:text-blue-400 transition-colors"
-        >
-          <ArrowLeftIcon className="h-5 w-5 mr-2" />
-          Back
-        </button>
-        <h1 className="text-3xl font-bold mb-8">Course Assessments</h1>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push('/home')}
+            className="flex items-center text-white hover:text-blue-400 transition-colors"
+          >
+            <ArrowLeftIcon className="h-5 w-5 mr-2" />
+            Back
+          </button>
+
+          {/* แสดงปุ่มสำหรับดูการประเมินทั้งหมดเมื่อมีการกรอง */}
+          {assessmentIdParam && (
+            <button
+              onClick={showAllAssessments}
+              className="text-sm px-4 py-2 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 rounded-lg transition-colors"
+            >
+              แสดงการประเมินทั้งหมด
+            </button>
+          )}
+        </div>
+
+        <h1 className="text-3xl font-bold mb-8">
+          {assessmentIdParam ? 'การประเมินที่เลือก' : 'การประเมินทั้งหมดในรายวิชา'}
+        </h1>
 
         {/* Show message when there are no assessments */}
-        {assessments.length === 0 && (
+        {filteredAssessments.length === 0 && (
           <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-blue-800/30 text-center">
             <p className="text-lg text-gray-300">
               ไม่พบข้อมูลการประเมินในรายวิชานี้
@@ -333,7 +371,7 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
 
         {/* Assessments List */}
         <div className="grid gap-6">
-          {assessments.map((assessment) => (
+          {filteredAssessments.map((assessment) => (
             <div
               key={assessment._id}
               className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-blue-800/30"
@@ -342,7 +380,11 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
                 <div>
                   <h2 className="text-xl font-semibold">{assessment.title}</h2>
                   <p className="text-blue-300">
-                    Due: {new Date(assessment.dueDate).toLocaleDateString()}
+                    Due: {new Date(assessment.dueDate).toLocaleDateString('th-TH', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
                   </p>
                   {/* แสดงความคืบหน้าการประเมิน */}
                   <p className="text-sm text-gray-400 mt-1">
@@ -482,7 +524,7 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
                     Evaluating {selectedMember.name}
                   </h3>
 
-                  {assessment.criteria.map((criterion, index) => (
+                  {assessment.criteria.map((criterion: Criterion, index: number) => (
                     <div key={index} className="mb-6">
                       <h4 className="font-medium mb-2">{criterion.title}</h4>
                       <p className="text-sm text-gray-300 mb-2">
@@ -501,7 +543,7 @@ const CoursePage = ({ params }: { params: Promise<{ courseId: string }> }) => {
                         }}
                       >
                         <option value="">Select rating</option>
-                        {criterion.ratingScale.map((scale) => (
+                        {criterion.ratingScale.map((scale: RatingScale) => (
                           <option key={scale.label} value={scale.label}>
                             {scale.label} - {scale.description}
                           </option>

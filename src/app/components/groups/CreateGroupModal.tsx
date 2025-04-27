@@ -66,12 +66,15 @@ const CreateGroupModal = memo(({
         onGroupCreated();
         onClose();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        showErrorToast(error.response?.data?.error || 'Failed to create group');
+      } else {
+        showErrorToast('Failed to create group');
+      }
       console.error('Error creating group:', error);
-      showErrorToast(error.response?.data?.error || 'Failed to create group');
-    } finally {
-      setIsSubmitting(false);
     }
+    
   };
 
   // Toggle student selection

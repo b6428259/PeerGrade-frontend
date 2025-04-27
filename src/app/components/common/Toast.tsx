@@ -1,7 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
-import { Toast, ToastProvider, ToastViewport } from '@/components/ui/toast';
+import React, { createContext, useContext } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
 

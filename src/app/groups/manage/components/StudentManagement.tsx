@@ -26,7 +26,6 @@ interface StudentManagementProps {
 }
 
 export default function StudentManagement({ 
-  course, 
   group, 
   availableStudents, 
   onAssignStudent 

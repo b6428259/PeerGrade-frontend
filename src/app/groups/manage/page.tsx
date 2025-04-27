@@ -34,7 +34,7 @@ interface Group {
 
 export default function ManageGroupsPage() {
     const router = useRouter();
-    const { user } = useAuth();
+    useAuth();
     const [courses, setCourses] = useState<Course[]>([]);
     const [selectedCourse, setSelectedCourse] = useState<string>('');
     const [groups, setGroups] = useState<Group[]>([]);

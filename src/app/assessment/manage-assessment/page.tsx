@@ -41,7 +41,7 @@ export default function ManageAssessment() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingAssessment, setExistingAssessment] = useState<Assessment | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [navigationPath, setNavigationPath] = useState('');
+  const [, setNavigationPath] = useState('');
 
   useEffect(() => {
     // Handle beforeunload event for unsaved changes

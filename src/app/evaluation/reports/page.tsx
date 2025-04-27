@@ -86,7 +86,7 @@ interface ReportData {
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  useAuth();
   const [reportData, setReportData] = useState<ReportData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

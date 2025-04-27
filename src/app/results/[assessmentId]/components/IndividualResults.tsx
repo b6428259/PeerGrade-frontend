@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trash2, Search, ChevronUp, ChevronDown, Filter, Award, ChevronsDown, ChevronsUp } from 'lucide-react';
+import { Trash2, Search, ChevronUp, ChevronDown, Award, ChevronsDown, ChevronsUp } from 'lucide-react';
 import axios from 'axios';
 
 interface EvaluateeStats {
@@ -66,7 +66,6 @@ export const IndividualResults = ({
                 (groupFilter === null || stat.groupName === groupFilter)
             )
             .sort((a, b) => {
-                const keys: SortConfig['key'][] = ['name', 'groupName', 'averageScore', 'totalEvaluations'];
                 const key = sortConfig.key;
 
                 if (key === 'name') {
